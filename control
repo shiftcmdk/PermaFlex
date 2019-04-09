@@ -3,7 +3,7 @@ Name: PermaFlex
 Depends: mobilesubstrate, com.shmoopillc.flexible
 Version: 0.0.1
 Architecture: iphoneos-arm
-Description: An awesome MobileSubstrate tweak!
+Description: Permanently hide elements with FLEXible.
 Maintainer: shiftcmdk
 Author: shiftcmdk
 Section: Tweaks
