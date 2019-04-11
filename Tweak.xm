@@ -105,8 +105,16 @@
 
 @interface UIView ()
 
+-(id)_viewControllerForAncestor;
+
 -(BOOL)pf_shouldHide;
 -(void)pf_hideIfNecessary;
+
+@end
+
+@interface UIViewController ()
+
+@property (getter=_window,nonatomic,readonly) UIWindow *window;
 
 @end
 
@@ -114,6 +122,18 @@
 
 %new
 -(BOOL)pf_shouldHide {
+    if (!self.superview && ![self isKindOfClass:[UIWindow class]]) {
+        return NO;
+    }
+
+    UIViewController *vc = [self _viewControllerForAncestor];
+
+    Class flexWindowClass = NSClassFromString(@"FLEXWindow");
+    
+    if ([vc._window isKindOfClass:flexWindowClass] || [[self valueForKey:@"_window"] isKindOfClass:flexWindowClass] || [self isKindOfClass:flexWindowClass]) {
+        return NO;
+    }
+
     NSString *frameString = [NSString stringWithFormat:@"%@", [self valueForKey:@"frame"]];
 
     PFFilter *filter = [[PFFilterManager sharedManager] filterForClass:[self class] frame:frameString];
@@ -159,33 +179,25 @@
 -(void)setBounds:(CGRect)arg1 {
     %orig;
 
-    if (self.alpha != 0.0 && [self pf_shouldHide]) {
-        self.alpha = 0.0;
-    }
+    [self pf_hideIfNecessary];
 }
 
 -(void)setCenter:(CGPoint)arg1 {
     %orig;
 
-    if (self.alpha != 0.0 && [self pf_shouldHide]) {
-        self.alpha = 0.0;
-    }
+    [self pf_hideIfNecessary];
 }
 
 -(void)setFrame:(CGRect)arg1 {
     %orig;
 
-    if (self.alpha != 0.0 && [self pf_shouldHide]) {
-        self.alpha = 0.0;
-    }
+    [self pf_hideIfNecessary];
 }
 
 -(void)layoutSubviews {
     %orig;
 
-    if (self.alpha != 0.0 && [self pf_shouldHide]) {
-        self.alpha = 0.0;
-    }
+    [self pf_hideIfNecessary];
 }
 
 -(void)setAlpha:(double)arg1 {
@@ -199,17 +211,30 @@
 -(void)setHidden:(BOOL)arg1 {
     %orig;
 
-    if (self.alpha != 0.0 && [self pf_shouldHide]) {
-        self.alpha = 0.0;
-    }
+    [self pf_hideIfNecessary];
 }
 
 %end
 
 %ctor {
     BOOL isSpringBoard = [[NSBundle mainBundle].bundleIdentifier isEqual:@"com.apple.springboard"];
+    
+    NSArray *args = [[NSProcessInfo processInfo] arguments];
 
-    if (isSpringBoard) {
+    BOOL shouldInit = NO;
+    
+    if (args.count != 0) {
+        NSString *executablePath = args[0];
+        if (executablePath) {
+            BOOL isApplication = [executablePath rangeOfString:@"/Application"].location != NSNotFound;
+            shouldInit = isSpringBoard || isApplication;
+            if (shouldInit) {
+                %init;
+            }
+        }
+    }
+
+    if (shouldInit) {
         [[PFFilterManager sharedManager] initForSpringBoard];
     }
 }

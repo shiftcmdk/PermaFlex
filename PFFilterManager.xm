@@ -2,16 +2,9 @@
 
 @interface PFFilterManager ()
 
-@property (nonatomic, retain) NSUserDefaults *defaults;
 @property (nonatomic, retain) NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, PFFilter *> *> *filters;
 
 -(void)save;
-
-@end
-
-@interface NSMutableDictionary ()
-
--(id)_stringToWrite;
 
 @end
 
@@ -27,14 +20,14 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
     if ([(NSString *)name hasPrefix:prefix]) {
         NSString *stripped = [(NSString *)name substringFromIndex:[prefix length]];
 		NSString *bundleID;
-
-		NSScanner *scanner = [NSScanner scannerWithString:stripped];
-		[scanner scanUpToString:@" " intoString:&bundleID];
-
-		NSString *prefixWithBundleID = [NSString stringWithFormat:@"%@%@ ", prefix, bundleID];
-
-		NSString *content = [(NSString *)name substringFromIndex:prefixWithBundleID.length];
-
+        
+        NSScanner *scanner = [NSScanner scannerWithString:stripped];
+        [scanner scanUpToString:@" " intoString:&bundleID];
+        
+        NSString *prefixWithBundleID = [NSString stringWithFormat:@"%@%@ ", prefix, bundleID];
+        
+        NSString *content = [(NSString *)name substringFromIndex:prefixWithBundleID.length];
+        
         NSString *dir = @"/var/mobile/Library/Preferences/PermaFlex/";
 
         if (![[NSFileManager defaultManager] fileExistsAtPath:dir isDirectory:nil]) {
@@ -45,7 +38,7 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
 
         BOOL saved = [content writeToFile:fileName atomically:YES encoding:NSUTF8StringEncoding error:nil];
 
-        NSLog(@"saving: %i", saved);
+        NSLog(@"[PermaFlex] saving: %i", saved);
     }
 }
 
@@ -62,8 +55,6 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
         }
 
         self.filters = [NSMutableDictionary dictionary];
-
-        //NSDictionary *viewClassesDict = nil;[self.defaults dictionaryForKey:@"viewclasses"];
 
         self.enabled = [viewClassesDict objectForKey:@"enabled"] == nil || [[viewClassesDict objectForKey:@"enabled"] boolValue];
 
@@ -100,7 +91,7 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
                 self.filters[key] = theFilterDict;
             }
         }
-        NSLog(@"init filters: %@", self.filters);
+        NSLog(@"[PermaFlex] init filters: %@", self.filters);
     }
 
     return self;
@@ -110,7 +101,7 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
     BOOL isSpringBoard = [[NSBundle mainBundle].bundleIdentifier isEqual:@"com.apple.springboard"];
 
     if (isSpringBoard) {
-        NSLog(@"initForSpringBoard");
+        NSLog(@"[PermaFlex] initForSpringBoard");
 
         CFNotificationCenterAddObserver(
             CFNotificationCenterGetDistributedCenter(),
@@ -124,7 +115,7 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
 }
 
 -(void)save {
-    NSLog(@"save called!!!");
+    NSLog(@"[PermaFlex] save called!!!");
     NSMutableDictionary *classesDict = [NSMutableDictionary dictionary];
 
     for (NSString *key in self.filters) {
@@ -139,7 +130,6 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
         classesDict[key] = theFilters;
     }
 
-    //[self.defaults setObject:classesDict forKey:@"viewclasses"];
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject:classesDict options:0 error:nil];
     NSString *jsonString = [[[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding] autorelease];
 
@@ -153,7 +143,7 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
         YES
     );
 
-    NSLog(@"save filters: %@", classesDict);
+    NSLog(@"[PermaFlex] save filters: %@", classesDict);
 }
 
 -(void)saveFilter:(PFFilter *)filter {
@@ -222,8 +212,6 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
 }
 
 -(void)dealloc {
-    //self.defaults = nil;
-
     self.filters = nil;
 
     BOOL isSpringBoard = [[NSBundle mainBundle].bundleIdentifier isEqual:@"com.apple.springboard"];
