@@ -1,7 +1,6 @@
 #import "PFFilterDetailTableViewController.h"
 #import "Cells/PFPropertyCell.h"
 #import "Model/PFProperty.h"
-#import "PFFilterManager.h"
 #include <objc/runtime.h>
 
 @interface PFFilterDetailTableViewController () <PFPropertyCellDelegate>
@@ -33,14 +32,16 @@
         PFProperty *newProp = [[[PFProperty alloc] initWithKey:prop.key value:prop.value valid:prop.valid equals:prop.equals] autorelease];
 
         [self.properties addObject:newProp];
-    }
 
-    for (PFProperty *prop in self.properties) {
-        @try {
-            NSString *value = [NSString stringWithFormat:@"%@", [self.viewToExplore valueForKeyPath:prop.key]];
-
-            [self.currentValues addObject:value];
-        } @catch (NSException *exception) {
+        if (self.viewToExplore) {
+            @try {
+                NSString *value = [NSString stringWithFormat:@"%@", [self.viewToExplore valueForKeyPath:newProp.key]];
+                
+                [self.currentValues addObject:value];
+            } @catch (NSException *exception) {
+                [self.currentValues addObject:@""];
+            }
+        } else {
             [self.currentValues addObject:@""];
         }
     }
@@ -57,7 +58,7 @@
 
     self.filter.properties = validProps;
 
-    [[PFFilterManager sharedManager] saveFilter:self.filter];
+    [self.manager saveFilter:self.filter];
 
     if (self.delegate) {
         [self.delegate detailDidSave];
@@ -75,7 +76,7 @@
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return self.properties.count + 1;
+    return self.viewToExplore ? self.properties.count + 1 : self.properties.count;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -91,6 +92,8 @@
 
         cell.delegate = self;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
+
+        cell.propertyTextField.userInteractionEnabled = self.viewToExplore != nil;
 
         PFProperty *prop = [self.properties objectAtIndex:indexPath.row];
         NSString *currentValue = [self.currentValues objectAtIndex:indexPath.row];
@@ -145,14 +148,19 @@
 
         NSString *currentValue;
 
-        @try {
+        if (self.viewToExplore) {
+            @try {
             currentValue = [NSString stringWithFormat:@"%@", [self.viewToExplore valueForKeyPath:theCell.propertyTextField.text]];
 
-            prop.valid = YES;
-        } @catch (NSException *exception) {
-            currentValue = @"";
+                prop.valid = YES;
+            } @catch (NSException *exception) {
+                currentValue = @"";
 
-            prop.valid = NO;
+                prop.valid = NO;
+            }
+        } else {
+            currentValue = @"";
+            prop.valid = YES;
         }
 
         [self.currentValues replaceObjectAtIndex:indexPath.row withObject:currentValue];
@@ -197,6 +205,8 @@
     self.viewToExplore = nil;
     self.properties = nil;
     self.filter = nil;
+    self.manager = nil;
+    self.currentValues = nil;
 
     [super dealloc];
 }

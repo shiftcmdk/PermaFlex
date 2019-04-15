@@ -91,6 +91,7 @@
         if ([[PFFilterManager sharedManager] enabled]) {
             PFFilterTableViewController *ctrl = [[[PFFilterTableViewController alloc] initWithStyle:UITableViewStyleGrouped] autorelease];
             ctrl.viewToExplore = self.viewToExplore;
+            ctrl.manager = [PFFilterManager sharedManager];
 
             [self.navigationController pushViewController:ctrl animated:YES];
         }

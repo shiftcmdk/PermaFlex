@@ -1,7 +1,6 @@
 #import "PFFilterTableViewController.h"
 #import "PFFilterDetailTableViewController.h"
 #import "Model/PFFilter.h"
-#import "PFFilterManager.h"
 
 @interface PFFilterTableViewController () <PFFilterDetailDelegate>
 
@@ -15,12 +14,19 @@
     [super viewDidLoad];
 
     [self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"AddNewCell"];
-    //[self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"FrameIdentifierCell"];
+    [self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"AddAnyFrameCell"];
 
-    self.filters = [NSMutableArray arrayWithArray:[[PFFilterManager sharedManager] filtersForClass:[self.viewToExplore class]]];
+    if (self.viewToExplore) {
+        self.filters = [NSMutableArray arrayWithArray:[self.manager filtersForClass:[self.viewToExplore class]]];
+    } else {
+        self.filters = [NSMutableArray arrayWithArray:[self.manager filtersForClassName:self.viewClass]];
+    }
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    if (!self.viewToExplore) {
+        return 1;
+    }
     return 2;
 }
 
@@ -28,7 +34,7 @@
     if (section == 0) {
         return self.filters.count;
     }
-    return 1;
+    return 2;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -41,27 +47,54 @@
 
         PFFilter *filter = [self.filters objectAtIndex:indexPath.row];
 
-        cell.textLabel.text = filter.frame;
+        if ([filter.frame isEqual:@"<any_frame>"]) {
+            cell.textLabel.text = @"Any Frame";
+        } else {
+            cell.textLabel.text = filter.frame;
+        }
+
         if (filter.properties.count == 1) {
             cell.detailTextLabel.text = @"1 additional property";
         } else {
             cell.detailTextLabel.text = [NSString stringWithFormat:@"%i additional properties", (int)filter.properties.count];
         }
-        //cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
         return cell;
     } else {
-        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"AddNewCell" forIndexPath:indexPath];
+        UITableViewCell *cell;
 
         NSString *frameString = [NSString stringWithFormat:@"%@", [self.viewToExplore valueForKey:@"frame"]];
 
-        cell.textLabel.text = [NSString stringWithFormat:@"Add %@", frameString];
-        if ([[PFFilterManager sharedManager] filterForClass:[self.viewToExplore class] frame:frameString]) {
-            cell.textLabel.textColor = [UIColor lightGrayColor];
-            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        PFFilter *existingFilter = [self.manager filterForClass:[self.viewToExplore class] frame:frameString];
+
+        if (indexPath.row == 0) {
+            cell = [tableView dequeueReusableCellWithIdentifier:@"AddNewCell" forIndexPath:indexPath];
+
+            cell.textLabel.text = [NSString stringWithFormat:@"Add %@", frameString];
+
+            BOOL createFrameSpecific = !existingFilter || [existingFilter.frame isEqual:@"<any_frame>"];
+
+            if (createFrameSpecific) {
+                cell.textLabel.textColor = self.view.tintColor;
+                cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+            } else {
+                cell.textLabel.textColor = [UIColor lightGrayColor];
+                cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            }
         } else {
-            cell.textLabel.textColor = self.view.tintColor;
-            cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+            cell = [tableView dequeueReusableCellWithIdentifier:@"AddAnyFrameCell" forIndexPath:indexPath];
+
+            cell.textLabel.text = @"Add Any Frame";
+
+            BOOL createAnyFrame = !existingFilter || ![self.manager hasAnyFrameForClass:[self.viewToExplore class]];
+            
+            if (createAnyFrame) {
+                cell.textLabel.textColor = self.view.tintColor;
+                cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+            } else {
+                cell.textLabel.textColor = [UIColor lightGrayColor];
+                cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            }
         }
 
         return cell;
@@ -74,15 +107,20 @@
 
 - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (editingStyle == UITableViewCellEditingStyleDelete) {
-        [[PFFilterManager sharedManager] deleteFilter:[self.filters objectAtIndex:indexPath.row]];
+        [self.manager deleteFilter:[self.filters objectAtIndex:indexPath.row]];
 
         [self.filters removeObjectAtIndex:indexPath.row];
 
         [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
 
-        [tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:0 inSection:1]] withRowAnimation:UITableViewRowAnimationAutomatic];
+        if (self.viewToExplore) {
+            [tableView reloadRowsAtIndexPaths:@[
+                [NSIndexPath indexPathForRow:0 inSection:1], 
+                [NSIndexPath indexPathForRow:1 inSection:1]
+            ] withRowAnimation:UITableViewRowAnimationAutomatic];
 
-        [self.viewToExplore performSelector:@selector(pf_hideIfNecessary)];
+            [self.viewToExplore performSelector:@selector(pf_hideIfNecessary)];
+        }
     }
 }
 
@@ -96,6 +134,8 @@
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0) {
         return @"Select a row to add additional properties to a frame variation. After deleting a variation a restart of the application may be required.";
+    } else if (section == 1) {
+        return @"Frame specific variations take precedence over the \"Any Frame\" variation.";
     }
     return nil;
 }
@@ -106,6 +146,7 @@
         ctrl.viewToExplore = self.viewToExplore;
         ctrl.filter = [self.filters objectAtIndex:indexPath.row];
         ctrl.delegate = self;
+        ctrl.manager = self.manager;
 
         UINavigationController *navCon = [[[UINavigationController alloc] initWithRootViewController:ctrl] autorelease];
 
@@ -114,16 +155,27 @@
     } else if (indexPath.section == 1) {
         NSString *className = NSStringFromClass([self.viewToExplore class]);
 
-        NSString *frame = [NSString stringWithFormat:@"%@", [self.viewToExplore valueForKey:@"frame"]];
+        NSString *frame;
 
-        if (![[PFFilterManager sharedManager] filterForClass:[self.viewToExplore class] frame:frame]) {
+        if (indexPath.row == 0) {
+            frame = [NSString stringWithFormat:@"%@", [self.viewToExplore valueForKey:@"frame"]];
+        } else {
+            frame = @"<any_frame>";
+        }
+
+        PFFilter *existingFilter = [self.manager filterForClass:[self.viewToExplore class] frame:frame];
+
+        BOOL createFrameSpecific = (!existingFilter || [existingFilter.frame isEqual:@"<any_frame>"]) && indexPath.row == 0;
+        BOOL createAnyFrame = (!existingFilter || ![self.manager hasAnyFrameForClass:[self.viewToExplore class]]) && indexPath.row == 1;
+
+        if (createFrameSpecific || createAnyFrame) {
             PFFilter *filter = [[[PFFilter alloc] initWithClassName:className frame:frame] autorelease];
 
             [self.filters addObject:filter];
 
             [tableView insertRowsAtIndexPaths:[NSArray arrayWithObject:[NSIndexPath indexPathForRow:self.filters.count - 1 inSection:0]] withRowAnimation:UITableViewRowAnimationAutomatic];
 
-            [[PFFilterManager sharedManager] saveFilter:filter];
+            [self.manager saveFilter:filter];
 
             UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
 
@@ -147,6 +199,10 @@
     self.viewToExplore = nil;
 
     self.filters = nil;
+
+    self.manager = nil;
+
+    self.viewClass = nil;
 
     [super dealloc];
 }

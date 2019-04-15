@@ -3,6 +3,7 @@
 @interface PFFilterManager ()
 
 @property (nonatomic, retain) NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, PFFilter *> *> *filters;
+@property (nonatomic, copy) NSString *bundleID;
 
 -(void)save;
 
@@ -42,9 +43,11 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
     }
 }
 
--(id)init {
+-(id)initWithBundleID:(NSString *)bundleID {
     if (self = [super init]) {
-        NSString *fileName = [@"/var/mobile/Library/Preferences/PermaFlex/" stringByAppendingPathComponent:[NSBundle mainBundle].bundleIdentifier];
+        self.bundleID = bundleID;
+
+        NSString *fileName = [@"/var/mobile/Library/Preferences/PermaFlex/" stringByAppendingPathComponent:self.bundleID];
 
         NSData *jsonData = [NSData dataWithContentsOfFile:fileName];
 
@@ -91,7 +94,7 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
                 self.filters[key] = theFilterDict;
             }
         }
-        NSLog(@"[PermaFlex] init filters: %@", self.filters);
+        NSLog(@"[PermaFlex] %@ init filters: %@", self.bundleID, self.filters);
     }
 
     return self;
@@ -118,26 +121,32 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
     NSLog(@"[PermaFlex] save called!!!");
     NSMutableDictionary *classesDict = [NSMutableDictionary dictionary];
 
+    NSMutableArray *keysToRemove = [NSMutableArray array];
+
     for (NSString *key in self.filters) {
         NSDictionary *filterDict = self.filters[key];
 
-        NSMutableDictionary *theFilters = [NSMutableDictionary dictionary];
+        if (filterDict.count == 0) {
+            [keysToRemove addObject:key];
+        } else {
+            NSMutableDictionary *theFilters = [NSMutableDictionary dictionary];
 
-        for (NSString *filterKey in filterDict) {
-            [theFilters addEntriesFromDictionary:[filterDict[filterKey] dictionaryRepresentation]];
+            for (NSString *filterKey in filterDict) {
+                [theFilters addEntriesFromDictionary:[filterDict[filterKey] dictionaryRepresentation]];
+            }
+
+            classesDict[key] = theFilters;
         }
-
-        classesDict[key] = theFilters;
     }
+
+    [self.filters removeObjectsForKeys:keysToRemove];
 
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject:classesDict options:0 error:nil];
     NSString *jsonString = [[[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding] autorelease];
 
-    NSString *bundleID = [NSBundle mainBundle].bundleIdentifier;
-
     CFNotificationCenterPostNotification(
         CFNotificationCenterGetDistributedCenter(), 
-        (CFStringRef)[NSString stringWithFormat:@"com.shiftcmdk.permaflex.%@ %@", bundleID, jsonString], 
+        (CFStringRef)[NSString stringWithFormat:@"com.shiftcmdk.permaflex.%@ %@", self.bundleID, jsonString], 
         NULL, 
         NULL, 
         YES
@@ -176,12 +185,20 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
     [self save];
 }
 
--(NSArray<PFFilter *> *)filtersForClass:(Class)cls {
+-(void)deleteFiltersForClassName:(NSString *)className {
+    if (!self.enabled) {
+        return;
+    }
+
+    [self.filters removeObjectForKey:className];
+
+    [self save];
+}
+
+-(NSArray<PFFilter *> *)filtersForClassName:(NSString *)classString {
     if (!self.enabled) {
         return [NSArray array];
     }
-
-    NSString *classString = NSStringFromClass(cls);
 
     NSMutableDictionary *filterDict = self.filters[classString];
 
@@ -191,6 +208,16 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
     return [NSArray array];
 }
 
+-(NSArray<PFFilter *> *)filtersForClass:(Class)cls {
+    if (!self.enabled) {
+        return [NSArray array];
+    }
+
+    NSString *classString = NSStringFromClass(cls);
+
+    return [self filtersForClassName:classString];
+}
+
 -(PFFilter *)filterForClass:(Class)cls frame:(NSString *)frame {
     if (!self.enabled) {
         return nil;
@@ -198,7 +225,35 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
 
     NSString *classString = NSStringFromClass(cls);
 
-    return self.filters[classString][frame];
+    PFFilter *possibleFilter = self.filters[classString][frame];
+
+    if (possibleFilter) {
+        return possibleFilter;
+    }
+
+    return self.filters[classString][@"<any_frame>"];
+}
+
+-(BOOL)hasAnyFrameForClass:(Class)cls {
+    NSString *classString = NSStringFromClass(cls);
+
+    return self.filters[classString][@"<any_frame>"] != nil;
+}
+
+-(NSArray<NSString *> *)allClasses {
+    if (!self.enabled) {
+        return nil;
+    }
+
+    NSMutableArray *classes = [NSMutableArray array];
+
+    for (NSString *key in self.filters) {
+        if (self.filters[key].count > 0) {
+            [classes addObject:key];
+        }
+    }
+
+    return [classes sortedArrayUsingSelector:@selector(compare:)];
 }
 
 +(instancetype)sharedManager
@@ -206,13 +261,15 @@ static void notificationCallback(CFNotificationCenterRef center, void *observer,
     static PFFilterManager *sharedManager = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        sharedManager = [[PFFilterManager alloc] init];
+        sharedManager = [[PFFilterManager alloc] initWithBundleID:[NSBundle mainBundle].bundleIdentifier];
     });
     return sharedManager;
 }
 
 -(void)dealloc {
     self.filters = nil;
+
+    self.bundleID = nil;
 
     BOOL isSpringBoard = [[NSBundle mainBundle].bundleIdentifier isEqual:@"com.apple.springboard"];
 

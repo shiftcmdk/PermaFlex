@@ -1,7 +1,7 @@
 include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = PermaFlexPreferences
-PermaFlexPreferences_FILES = PFRootListController.xm PFApp.m PFAppCell.m
+PermaFlexPreferences_FILES = PFRootListController.xm PFApp.m PFAppCell.m ../PFFilterManager.xm ../Model/PFFilter.m ../Model/PFProperty.m PFClassesListController.m ../PFFilterTableViewController.m ../PFFilterDetailTableViewController.m ../Cells/PFPropertyCell.m
 PermaFlexPreferences_INSTALL_PATH = /Library/PreferenceBundles
 PermaFlexPreferences_FRAMEWORKS = UIKit
 PermaFlexPreferences_PRIVATE_FRAMEWORKS = Preferences

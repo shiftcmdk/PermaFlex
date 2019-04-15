@@ -1,6 +1,7 @@
 #include "PFRootListController.h"
 #import "PFApp.h"
 #import "PFAppCell.h"
+#import "PFClassesListController.h"
 
 @interface LSApplicationProxy: NSObject
 
@@ -189,6 +190,11 @@
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    PFClassesListController *ctrl = [[[PFClassesListController alloc] init] autorelease];
+    ctrl.app = [self.apps objectAtIndex:indexPath.row];
+
+    [self pushController:ctrl animate:YES];
+
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 }
 
@@ -221,6 +227,8 @@
     [self.tableView removeFromSuperview];
 
     self.tableView = nil;
+
+    self.apps = nil;
 
     [super dealloc];
 }
