@@ -1,7 +1,7 @@
 Package: com.shiftcmdk.permaflex
 Name: PermaFlex
 Depends: mobilesubstrate, com.shmoopillc.flexible
-Version: 1.0
+Version: 1.0.1
 Architecture: iphoneos-arm
 Description: Permanently hide elements with FLEXible.
 Maintainer: shiftcmdk
