@@ -106,6 +106,7 @@
 
 @interface UIView ()
 
+@property (nonatomic, assign) BOOL pf_hide;
 -(id)_viewControllerForAncestor;
 
 -(BOOL)pf_shouldHide;
@@ -121,6 +122,8 @@
 
 %hook UIView
 
+%property (nonatomic, assign) BOOL pf_hide;
+
 %new
 -(BOOL)pf_shouldHide {
     if (!self.superview && ![self isKindOfClass:[UIWindow class]]) {
@@ -130,8 +133,23 @@
     UIViewController *vc = [self _viewControllerForAncestor];
 
     Class flexWindowClass = NSClassFromString(@"FLEXWindow");
+
+    UIView *theView = self;
+    UIView *lastSuperview = self;
+
+    while (!vc && ![theView valueForKey:@"_window"] && theView) {
+        vc = [theView.superview _viewControllerForAncestor];
+        if (theView.superview) {
+            lastSuperview = theView.superview;
+        }
+        theView = theView.superview;
+    }
+
+    if (!lastSuperview.superview && ![lastSuperview isKindOfClass:[UIWindow class]]) {
+        return NO;
+    }
     
-    if ([vc._window isKindOfClass:flexWindowClass] || [[self valueForKey:@"_window"] isKindOfClass:flexWindowClass] || [self isKindOfClass:flexWindowClass]) {
+    if ([vc._window isKindOfClass:flexWindowClass] || [[lastSuperview valueForKey:@"_window"] isKindOfClass:flexWindowClass] || [self isKindOfClass:flexWindowClass]) {
         return NO;
     }
 
@@ -173,6 +191,7 @@
 %new
 -(void)pf_hideIfNecessary {
     if (self.alpha != 0.0 && [self pf_shouldHide]) {
+        self.pf_hide = YES;
         self.alpha = 0.0;
     }
 }
@@ -202,7 +221,10 @@
 }
 
 -(void)setAlpha:(double)arg1 {
-    if ([self pf_shouldHide]) {
+    if (self.pf_hide) {
+        self.pf_hide = NO;
+        %orig(0.0);
+    } else if ([self pf_shouldHide]) {
         %orig(0.0);
     } else {
         %orig;
