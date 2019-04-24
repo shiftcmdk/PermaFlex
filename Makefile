@@ -1,5 +1,7 @@
 include $(THEOS)/makefiles/common.mk
 
+ARCHS = arm64 arm64e
+
 TWEAK_NAME = PermaFlex
 PermaFlex_FILES = Tweak.xm PFFilterTableViewController.m PFFilterDetailTableViewController.m Cells/PFPropertyCell.m Model/PFProperty.m Model/PFFilter.m PFFilterManager.xm
 
